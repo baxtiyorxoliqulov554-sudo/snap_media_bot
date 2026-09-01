@@ -13,7 +13,6 @@ logging.basicConfig(level=logging.INFO)
 bot = Bot(token=TOKEN)
 dp = Dispatcher()
 
-# Bazaviy xotira
 DB = {
     "super_admin": 8520429829,  
     "admins": {8520429829: {"can_manage_admins": True}}, 
@@ -66,7 +65,8 @@ async def check_subscriptions(user_id: int) -> bool:
 async def get_sub_keyboard():
     builder = InlineKeyboardBuilder()
     for ch in DB["channels"]:
-        builder.row(types.InlineKeyboardButton(text=f"📢 Obuna bo'lish: {ch['username']}", url=f"https://t.me/{ch['username'].replace('@', '')}"))
+        clean_user = ch['username'].replace('@', '').replace('https://t.me/', '').replace('t.me/', '')
+        builder.row(types.InlineKeyboardButton(text=f"📢 Obuna bo'lish", url=f"https://t.me/{clean_user}"))
     builder.row(types.InlineKeyboardButton(text="✅ Obunani tekshirish", callback_data="check_sub"))
     return builder.as_markup()
 
@@ -119,7 +119,6 @@ async def callback_check_sub(callback: types.CallbackQuery, state: FSMContext):
     else:
         await callback.answer("Obuna bo'ling!", show_alert=True)
 
-# --- KINO QIDIRISH ---
 @dp.message(F.text == "🎬 Kino qidirish (Kod kiritish)")
 async def btn_search_movie(message: types.Message, state: FSMContext):
     if not await check_subscriptions(message.from_user.id):
@@ -147,7 +146,6 @@ async def process_user_movie_code(message: types.Message, state: FSMContext):
         await message.answer("❌ Bunday kino kodi mavjud emas")
     await state.clear()
 
-# --- REYTING ---
 @dp.message(F.text == "⭐ Kino reytingi")
 async def btn_movie_rating(message: types.Message):
     if not DB["movies"]:
@@ -172,7 +170,6 @@ async def show_rated_movie(callback: types.CallbackQuery):
         else:
             await callback.message.answer(m['file_id'], caption=caption)
 
-# --- SHIKOYAT ---
 @dp.message(F.text == "🚨 Shikoyat qilish")
 async def btn_make_report(message: types.Message, state: FSMContext):
     await message.answer("Sizning shikoyatingizni tez o'rganib chiqamiz, nima muammo bor yozing:")
@@ -218,7 +215,6 @@ async def finish_report(message: types.Message, state: FSMContext, file_id, is_c
         except:
             pass
 
-# --- ADMIN PANEL ---
 @dp.message(F.text == "🛠️ Admin Panel")
 async def btn_admin_panel(message: types.Message):
     if not is_admin(message.from_user.id):
@@ -232,7 +228,6 @@ async def btn_admin_panel(message: types.Message):
     kb.row(types.InlineKeyboardButton(text="⚠️ Texnik ishlar", callback_data="admin_maint"))
     await message.answer("🛠️ **Admin Panel Boshqaruvi:**", reply_markup=kb.as_markup())
 
-# KINO YUKLASH / O'CHIRISH
 @dp.callback_query(F.data == "admin_upload_movie")
 async def admin_up_movie_start(callback: types.CallbackQuery, state: FSMContext):
     await callback.message.answer("Kino yuklash uchun kino kodini yuboring:")
@@ -274,7 +269,6 @@ async def admin_execute_del_movie(message: types.Message, state: FSMContext):
         await message.answer("❌ Bunday kino kodi mavjud emas")
     await state.clear()
 
-# REKLAMA
 @dp.callback_query(F.data == "admin_ads")
 async def admin_ads_menu(callback: types.CallbackQuery):
     kb = InlineKeyboardBuilder()
@@ -340,7 +334,6 @@ async def ad_get_time(message: types.Message, state: FSMContext):
     except ValueError:
         await message.answer("❌ Faqat raqam kiriting:")
 
-# KANALLAR
 @dp.callback_query(F.data == "admin_channels")
 async def admin_channels_menu(callback: types.CallbackQuery):
     kb = InlineKeyboardBuilder()
@@ -352,23 +345,32 @@ async def admin_channels_menu(callback: types.CallbackQuery):
 
 @dp.callback_query(F.data == "add_ch")
 async def add_ch_prompt(callback: types.CallbackQuery, state: FSMContext):
-    await callback.message.answer("Kanal @username sini kiriting (masalan: @snap_media_kino_kodi):")
+    await callback.message.answer("Kanal havolasini yoki @username sini yuboring (Masalan: `t.me/snap_media_kino_kodi` yoki `@snap_media_kino_kodi`):", parse_mode="Markdown")
     await state.set_state(AdminStates.waiting_for_channel)
 
 @dp.message(AdminStates.waiting_for_channel)
 async def check_bot_admin_in_channel(message: types.Message, state: FSMContext):
-    username = message.text.strip()
+    raw_text = message.text.strip()
+    # Havolalarni tozalab username formatiga keltiramiz (@ bilan boshlanadigan)
+    username = raw_text.replace("https://t.me/", "@").replace("t.me/", "@")
+    if not username.startswith("@"):
+        username = "@" + username
+        
     try:
         chat = await bot.get_chat(username)
         bot_member = await bot.get_chat_member(chat.id, bot.id)
         if bot_member.status in ["administrator", "creator"]:
             DB["channels"].append({"id": len(DB["channels"]) + 1, "username": username})
             await state.clear()
-            await message.answer(f"✅ Kanal qo'shildi: {username}", reply_markup=get_main_menu(message.from_user.id))
+            await message.answer(f"✅ Kanal muvaffaqiyatli qo'shildi: {username}", reply_markup=get_main_menu(message.from_user.id))
         else:
-            await message.answer("❌ Bot bu kanalda admin emas! Avval botni kanalga admin qiling va qayta yuboring:")
+            await message.answer(
+                "❌ **Bot bu kanalda ADMIN emas!**\n\n"
+                "Sababi: Telegram qoidasiga ko'ra, bot kanalni tekshirishi uchun kanalga Administrator qilib qo'yilishi shart. "
+                "Iltimos, botni kanalga admin qilib, keyin yana shu havolani yuboring."
+            )
     except Exception as e:
-        await message.answer(f"❌ Xatolik! Kanal topilmadi yoki botni kanalga admin qilmagansiz. (Asosiy sabab: {e})")
+        await message.answer(f"❌ Xatolik! Kanal topilmadi yoki xato havola kiritildi.\n(Tafsilot: {e})")
 
 @dp.callback_query(F.data.startswith("del_ch_"))
 async def delete_channel_action(callback: types.CallbackQuery):
@@ -377,7 +379,6 @@ async def delete_channel_action(callback: types.CallbackQuery):
     await callback.answer("Kanal o'chirildi!")
     await admin_channels_menu(callback)
 
-# ADMINLARNI BOSHQARISH (ID yoki Forward orqali to'g'ridan-to'g'ri ishlaydi)
 @dp.callback_query(F.data == "admin_manage")
 async def admin_manage_menu(callback: types.CallbackQuery):
     if not can_manage_admins(callback.from_user.id):
@@ -399,7 +400,7 @@ async def get_adm_id(message: types.Message, state: FSMContext):
     try:
         admin_id = int(text.replace("@", ""))
     except:
-        admin_id = text # Agar username bo'lsa
+        admin_id = text 
     await state.update_data(admin_id=admin_id)
     kb = InlineKeyboardBuilder()
     kb.row(types.InlineKeyboardButton(text="Ha ✅", callback_data="perm_yes"),
@@ -412,7 +413,6 @@ async def save_new_admin(callback: types.CallbackQuery, state: FSMContext):
     data = await state.get_data()
     adm_id = data["admin_id"]
     
-    # Raqamli ID bo'lsa bazaga qo'shamiz
     if isinstance(adm_id, int):
         DB["admins"][adm_id] = {"can_manage_admins": can_manage}
     
@@ -451,9 +451,8 @@ async def finish_del_admin(message: types.Message, state: FSMContext):
     if adm_id in DB["admins"]:
         del DB["admins"][adm_id]
     await state.clear()
-    await message.answer("✅ Admin huquqi olib tashlandi va u oddiy foydalanuvchiga aylantirildi.", reply_markup=get_main_menu(message.from_user.id))
+    await message.answer("✅ Admin huquqi olib tashlandi va u oddiy foydalanuvchiga aylantirildi.", reply_markup=get_main_menu(message.chat.id))
 
-# TEXNIK ISHLAR
 @dp.callback_query(F.data == "admin_maint")
 async def admin_maint(callback: types.CallbackQuery, state: FSMContext):
     DB["maintenance"]["status"] = not DB["maintenance"]["status"]
