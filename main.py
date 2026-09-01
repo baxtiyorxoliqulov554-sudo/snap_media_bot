@@ -113,11 +113,11 @@ async def callback_check_sub(callback: types.CallbackQuery, state: FSMContext):
     if await check_subscriptions(callback.from_user.id):
         await callback.message.delete()
         await callback.message.answer(
-            "XUSH KELIBSIZ! O'sha o'sha kino kodini maxsus kanalda topishingiz mumkin:\nhttps://t.me/snap_media_kino_kodi", 
+            "XUSH KELIBSIZ! Asosiy menyu:", 
             reply_markup=get_main_menu(callback.from_user.id)
         )
     else:
-        await callback.answer("Obuna bo'ling!", show_alert=True)
+        await callback.answer("Hali hamma kanalga obuna bo'lmadingiz!", show_alert=True)
 
 @dp.message(F.text == "🎬 Kino qidirish (Kod kiritish)")
 async def btn_search_movie(message: types.Message, state: FSMContext):
@@ -358,17 +358,9 @@ async def check_bot_admin_in_channel(message: types.Message, state: FSMContext):
         
     try:
         chat = await bot.get_chat(username)
-        bot_member = await bot.get_chat_member(chat.id, bot.id)
-        if bot_member.status in ["administrator", "creator"]:
-            DB["channels"].append({"id": len(DB["channels"]) + 1, "username": username})
-            await state.clear()
-            await message.answer(f"✅ Kanal muvaffaqiyatli qo'shildi: {username}", reply_markup=get_main_menu(message.from_user.id))
-        else:
-            await message.answer(
-                "❌ **Bot bu kanalda ADMIN emas!**\n\n"
-                "Sababi: Telegram qoidasiga ko'ra, bot kanalni tekshirishi uchun kanalga Administrator qilib qo'yilishi shart. "
-                "Iltimos, botni kanalga admin qilib, keyin yana shu havolani yuboring."
-            )
+        DB["channels"].append({"id": len(DB["channels"]) + 1, "username": username})
+        await state.clear()
+        await message.answer(f"✅ Kanal muvaffaqiyatli qo'shildi: {username}\n\n(Eslatma: Foydalanuvchilar obuna bo'lganini tekshirishi uchun bot shu kanalga admin qilingan bo'lishi kerak!)", reply_markup=get_main_menu(message.from_user.id))
     except Exception as e:
         await message.answer(f"❌ Xatolik! Kanal topilmadi yoki xato havola kiritildi.\n(Tafsilot: {e})")
 
@@ -455,7 +447,7 @@ async def finish_del_admin(message: types.Message, state: FSMContext):
 
 @dp.callback_query(F.data == "admin_maint")
 async def admin_maint(callback: types.CallbackQuery, state: FSMContext):
-    DB["maintenance"]["status"] = not DB["maintenance"]["status"]
+    DB["maintenance"]["status"]  = not DB["maintenance"]["status"]
     status = "Yoniq ⚠️" if DB["maintenance"]["status"] else "O'chiq ✅"
     await callback.message.answer(f"Texnik ishlar holati: {status}\nSababini kiriting:")
     await state.set_state(AdminStates.waiting_for_maint_reason)
